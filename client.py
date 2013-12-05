@@ -1,7 +1,6 @@
 import socket
 # CLIENT
 MAX_BUFFER_SIZE = 16
-PORT = 8765
 
 class MySocket:
     '''
@@ -15,9 +14,10 @@ class MySocket:
                 socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.sock = sock
-        self.msg2_start = '' # beginning of msg2; transmitted with end of msg1
+        self.msgs_rest = '' # msgs after first delimiter
 
     def connect(self, host, port):
+        print ("Client about to connect")
         self.sock.connect((host, port))
 
     def mysend(self, msg):
@@ -34,22 +34,27 @@ class MySocket:
     
     def myreceive_one(self):
         '''read one msg, chunk by chunk'''
-        msg = self.msg2_start
-        self.msg2_start = '' # reset instance variable
+        #msgs_rest = self.msgs_rest
+        #self.msgs_rest = '' # reset instance variable
+
+        msg, sep, msgs_rest = self.msgs_rest.partition("\0")
+        if sep != '':
+            self.msgs_rest = msgs_rest
+            return msg
+
         while True:
             chunk = self.sock.recv(MAX_BUFFER_SIZE)
-            print ("client received ", chunk, len(chunk))
+            #print ("client received ", chunk, len(chunk))
             # check for msg delimiter
-            index = chunk.find("\0")
-            if index  >= 0:
+            next_msg, sep, msgs_rest = chunk.partition("\0")
+            if sep  != '':
                 # delimiter found
-                msg1_end, msg2_start = chunk.split('\0')
-                self.msg2_start = msg2_start
-                msg = msg + msg1_end
+                msg = msg + next_msg
+                self.msgs_rest = msgs_rest
                 return msg
             else:
                 # delimiter not found
-                msg = msg + chunk
+                msg = msg + next_msg
 
             
     def myreceive_all(self):
@@ -59,14 +64,9 @@ class MySocket:
         num_msgs = int(first_msg)
         for i in range(num_msgs):
             msgs.append(self.myreceive_one())
-            print ("msg", msgs[i])
+            #print ("msg", msgs[i])
         self.sock.close()
-        text = ''.join(msgs)
-        print len(text)
-        return text
+        return msgs
 
-s = MySocket()
-s.connect('', PORT)
-s.mysend('Here I am. Sending a longer message.')
-print (s.myreceive_all())
+
 
