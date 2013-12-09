@@ -10,10 +10,11 @@ PORT = 8765
 #	N_MSG = len(MSGS)
 
 def start_server():
-	server_s = Server.MySocket()
-	server_s.echo_serve(PORT)
+	''' create server socket; call the handler'''
+	s = Server.MySocket()
+	#server_s.echo_serve(PORT)
+	s.serv(PORT, s.echo_handler) 
 
-#print 'Server sent {} msgs'.format(N_MSG)
 print 'Echo Server starting'
 start_server()
 
