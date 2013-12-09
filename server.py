@@ -2,25 +2,22 @@ import socket
 import threading
 # SERVER 
 
-MAX_BUFFER_SIZE = 1024
+PORT = 8765
+MAX_BUFFER_SIZE = 16
 BACKLOG = 5
 
-class MySocket:
+class Server:
     '''
     a server socket
     '''
 
-    def __init__(self, sock=None):
-        if sock is None:
-            self.sock = socket.socket(
-                socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow reuse of local addresses (why is this not the default?)
-        else:
-            self.sock = sock
-
-    def serv(self, port, handler, msgs=None):
+    def __init__(self, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow reuse of local addresses (why is this not the default?)
         self.sock.bind(('', port))
         self.sock.listen(BACKLOG) # max number of connections waiting to be served
+
+    def serv(self, handler, msgs=None):
         print "Server about to accept"
         while(True):
             try:
@@ -99,3 +96,8 @@ class  Connection(threading.Thread):
 
     def run(self):
         self.handler(self.addr, self.client, self.msgs)
+
+if __name__ == "__main__":
+    print 'Echo Server starting'
+    s = Server(PORT)
+    s.serv(s.echo_handler) 

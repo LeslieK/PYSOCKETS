@@ -1,24 +1,18 @@
 import socket
 # CLIENT
-MAX_BUFFER_SIZE = 16
+MAX_BUFFER_SIZE = 1024
 
-class MySocket:
+class Client:
     '''
     a client socket
     '''
 
-    def __init__(self, sock=None):
+    def __init__(self, host, port):
         '''creates a client socket'''
-        if sock is None:
-            self.sock = socket.socket(
-                socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            self.sock = sock
-        self.msgs_rest = '' # msgs after first delimiter
-
-    def connect(self, host, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print "Client about to connect"
         self.sock.connect((host, port))
+        self.msgs_rest = '' # msgs after first delimiter
 
     def mysend(self, msg):
         '''sends 1 message'''

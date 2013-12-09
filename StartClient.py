@@ -4,12 +4,12 @@ import Client
 PORT = 8765
 
 with open("Genesis.txt") as f:
-	MSGS = f.read().split('\n')
+	MSGS = f.readlines()
 
 def start_client(n, msgs):
 	'''create Client socket; send all data'''
-	s = Client.MySocket()
-	s.connect('localhost', PORT)
+	s = Client.Client('localhost', PORT)
+	#s.connect('localhost', PORT)
 	# send first message with number of messages
 
 	s.mysend(str(n * len(msgs))) # requires file read all at once
