@@ -67,8 +67,11 @@ class MySocket:
         num_msgs = int(first_msg)
         for i in range(num_msgs):
             msgs.append(self.myreceive_one())
-        self.sock.close()
+    #    self.sock.close()
         return msgs
+
+    def close(self):
+        self.sock.close()
 
 
 

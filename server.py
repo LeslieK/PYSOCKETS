@@ -1,4 +1,5 @@
 import socket
+import threading
 # SERVER 
 
 MAX_BUFFER_SIZE = 1024
@@ -10,7 +11,6 @@ class MySocket:
     '''
 
     def __init__(self, sock=None):
-        self.msgs_rest = ''
         if sock is None:
             self.sock = socket.socket(
                 socket.AF_INET, socket.SOCK_STREAM)
@@ -24,9 +24,11 @@ class MySocket:
         print "Server about to accept"
         while(True):
             try:
-                client_sock, client_addr = self.sock.accept()
-                print "connection attempt", client_addr
-                handler(client_addr, client_sock, msgs)
+                client, addr = self.sock.accept()
+                print "connection attempt", client
+                c = Connection(client, addr, handler, msgs)
+                c.start()
+                print "Started connection"
             except socket.error as e:
                 if e.errno == 10054:
                     print e
@@ -49,16 +51,14 @@ class MySocket:
         '''echos all messages received from Client back to Client'''
         self.msgs_handler(client_addr, client_sock, self.myreceive_all(client_sock))
             
-    def myreceive_one(self, client_sock):
+    def myreceive_one(self, client_sock, msgs_rest_passed):
         '''read one msg, chunk by chunk; return one msg'''
-        #msgs_rest = self.msgs_rest
-        #self.msgs_rest = '' # reset instance variable
 
         # read rest of last message from buffer (if buffer not empty)
-        msg, sep, msgs_rest = self.msgs_rest.partition("\0")
+        msg, sep, msgs_rest = msgs_rest_passed.partition("\0")
         if sep != '':
-            self.msgs_rest = msgs_rest
-            return msg
+            msgs_rest_new = msgs_rest
+            return (msg, msgs_rest_new)
 
         while True:
             chunk = client_sock.recv(MAX_BUFFER_SIZE)
@@ -68,8 +68,8 @@ class MySocket:
             if sep  != '':
                 # delimiter found
                 msg = msg + next_msg
-                self.msgs_rest = msgs_rest
-                return msg
+                msgs_rest_new = msgs_rest
+                return (msg, msgs_rest_new)
             else:
                 # delimiter not found
                 msg = msg + next_msg
@@ -78,10 +78,24 @@ class MySocket:
     def myreceive_all(self, client_sock):
         ''' returns a list of messages'''
         msgs=[]
-        first_msg = self.myreceive_one(client_sock)
+        first_msg, msgs_rest = self.myreceive_one(client_sock, '')
         print ("first msg:", first_msg) # number of msgs to follow
         num_msgs = int(first_msg)
         for i in range(num_msgs):
-            msgs.append(self.myreceive_one(client_sock))
+            m, msgs_rest = self.myreceive_one(client_sock, msgs_rest)
+            msgs.append(m)
         return msgs
         
+class  Connection(threading.Thread):
+    """
+    a threaded connection between server and client
+    """
+    def __init__(self, client_sock, client_addr, handler, msgs=None):
+        threading.Thread.__init__(self)
+        self.client = client_sock
+        self.addr = client_addr
+        self.handler = handler
+        self.msgs = msgs
+
+    def run(self):
+        self.handler(self.addr, self.client, self.msgs)
