@@ -17,14 +17,15 @@ class MySocket:
         self.msgs_rest = '' # msgs after first delimiter
 
     def connect(self, host, port):
-        print ("Client about to connect")
+        print "Client about to connect"
         self.sock.connect((host, port))
 
     def mysend(self, msg):
-        totalsent = 0
+        '''sends 1 message'''
+        totalsent = 0 # number of characters
         while totalsent < len(msg):
             sent = self.sock.send(msg[totalsent:])
-            print ("client sent ",  sent)
+            print "client sent ",  sent
             if sent == 0:
                 raise RuntimeError("socket connection broken")
             totalsent = totalsent + sent
@@ -33,10 +34,11 @@ class MySocket:
 
     
     def myreceive_one(self):
-        '''read one msg, chunk by chunk'''
+        '''read one msg, chunk by chunk; returns one msg'''
         #msgs_rest = self.msgs_rest
         #self.msgs_rest = '' # reset instance variable
 
+        # read rest of last message from buffer (if buffer not empty)
         msg, sep, msgs_rest = self.msgs_rest.partition("\0")
         if sep != '':
             self.msgs_rest = msgs_rest
@@ -58,13 +60,13 @@ class MySocket:
 
             
     def myreceive_all(self):
+        '''returns a list of messages'''
         msgs=[]
         first_msg = self.myreceive_one()
-        print ("first msg:", first_msg) # number of msgs to follow; sent by server
+        print "first msg:", first_msg # number of msgs to follow
         num_msgs = int(first_msg)
         for i in range(num_msgs):
             msgs.append(self.myreceive_one())
-            #print ("msg", msgs[i])
         self.sock.close()
         return msgs
 
