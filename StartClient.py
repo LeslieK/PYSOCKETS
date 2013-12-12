@@ -26,11 +26,14 @@ while running:
 	for s in writeready:
 		isDone = client.send()
 		if isDone:
+			print "Done sending"
 			wsocket.remove(s)
 	for s in readready:
 		isDone = client.receive()
 		if isDone:
 			rsocket.remove(s)
+			print "Done receiving"
+			running = False
 			s.close()
 
 
