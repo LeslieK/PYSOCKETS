@@ -1,24 +1,41 @@
 import Client
-#import Server
+import select
+
 
 PORT = 8765
+SERVER_ADDR = ('localhost', PORT)
 
 with open("Genesis.txt") as f:
-	MSGS = f.readlines()
+	# retain "\n" 
+	# newline is msg delimiter
+	MSGS = []
+	while True:
+		msg = f.readline()
+		if msg != "":
+			MSGS.append(msg)
+		else:
+			break
 
-def start_client(n, msgs):
-	'''create Client socket; send all data'''
-	s = Client.Client('localhost', PORT)
-	#s.connect('localhost', PORT)
-	# send first message with number of messages
+client = Client.Client(SERVER_ADDR, MSGS) # creates a non-blocking client socket
+rsocket = [client.sock]
+wsocket = [client.sock]
 
-	s.mysend(str(n * len(msgs))) # requires file read all at once
-	for _ in range(n):
-		for msg in msgs:
-			s.mysend(msg)
-	print len(s.myreceive_all()) # print what it receives from server
+running = True
+while running:
+	readready, writeready, _ = select.select(rsocket, wsocket, [])
+	for s in writeready:
+		isDone = client.send()
+		if isDone:
+			wsocket.remove(s)
+	for s in readready:
+		isDone = client.receive()
+		if isDone:
+			rsocket.remove(s)
+			s.close()
 
-	s.close()
 
-print 'Client about to send {} msgs'.format(len(MSGS))
-start_client(100, MSGS)
+
+
+
+
+
