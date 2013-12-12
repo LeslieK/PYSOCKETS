@@ -1,103 +1,103 @@
 import socket
-import threading
+import select
+from collections import defaultdict, deque
+
 # SERVER 
 
 PORT = 8765
-MAX_BUFFER_SIZE = 16
+SERVER_ADDR = ('localhost', PORT)
+MAX_BUFFER_SIZE = 1024
 BACKLOG = 5
+DELIMITER = "\n"
 
 class Server:
     '''
-    a server socket
+    A server that uses select to handle multiple clients at a time.
+    Entering any line of input at the terminal will exit the server.
     '''
 
     def __init__(self, port):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow reuse of local addresses (why is this not the default?)
-        self.sock.bind(('', port))
+        self.sock.bind(SERVER_ADDR)
         self.sock.listen(BACKLOG) # max number of connections waiting to be served
+        self.MSGS = defaultdict(deque)     # complete messages per client     
+        self.buffers = {}                  # partial messages per client
+        self.MSGSLEN = {}                  # message lengths per client [len, sent, recvd]
 
-    def serv(self, handler, msgs=None):
-        print "Server about to accept"
-        while(True):
-            try:
-                client, addr = self.sock.accept()
-                print "connection attempt", client
-                c = Connection(client, addr, handler, msgs)
-                c.start()
-                print "Started connection"
-            except socket.error as e:
-                if e.errno == 10054:
-                    print e
-                continue
+    def serv(self, inputs, msgs=None):  # inputs = [self.sock]
+        inputs = set(inputs)
+        outputs = set()
+        running = True
+        while running:
+            readready, writeready, _ = select.select(inputs, outputs, [])
+            print readready
+            for s in readready:
+                if s == self.sock:
+                    # handle the server socket
+                    try:
+                        client, addr = self.sock.accept()
+                        print "Server accepted {}".format(client.getsockname())
+                        client.setblocking(False)
+                        self.MSGS[client.fileno()].append("")
+                        self.buffers[client.fileno()] = ""
+                        self.MSGSLEN[client.fileno()] = -1
+                        inputs.add(client)
+                    except socket.error as e:
+                        if e.errno == 10054:
+                            print e
+                        continue
+                else:
+                    # read from client socket
+                    self.read(s)
+                    # data can be sent to client
+                    outputs.add(s)
+            for s in writeready:
+                    # write to client socket
+                    print "Writing to {}".format(s)
+                    self.write(s)
 
-    def msgs_handler(self, client_addr, client_sock, msgs):
-        '''sends msgs to Client'''
-            # msg = client_sock.recv(MAX_BUFFER_SIZE)
-            # print ("received ",  len(msg))
-            # if not msg:
-            #     break
-        # send msg with number of msgs to expect after this one
-        client_sock.sendall(str(len(msgs))+"\0")
-        for msg in msgs:
-            client_sock.sendall(msg+"\0")
-        client_sock.close()
-        print "Connection closed. Bye"
-
-    def echo_handler(self, client_addr, client_sock, msgs):
-        '''echos all messages received from Client back to Client'''
-        self.msgs_handler(client_addr, client_sock, self.myreceive_all(client_sock))
-            
-    def myreceive_one(self, client_sock, msgs_rest_passed):
-        '''read one msg, chunk by chunk; return one msg'''
-
-        # read rest of last message from buffer (if buffer not empty)
-        msg, sep, msgs_rest = msgs_rest_passed.partition("\0")
-        if sep != '':
-            msgs_rest_new = msgs_rest
-            return (msg, msgs_rest_new)
-
-        while True:
+    def write(self, client_sock):
+        """write characters"""
+        # attempt to write a complete message
+        nextMSG = self.MSGS[client_sock.fileno()].popleft()
+        if nextMSG != '':
+            print "Server: about to send {}".format(nextMSG)
+            sent = client_sock.send(nextMSG)
+            print "Server sent {} bytes to {}".format(sent, client_sock.getsockname())
+            if sent == 0:
+                raise RuntimeError("socket connection broken")
+            self.MSGS[client_sock.fileno()].appendleft(nextMSG[sent:]) # add part of msg not sent to front of deque
+        return 
+    
+    def read(self, client_sock):
+        """read characters; build messages"""
+        buff = self.buffers[client_sock.fileno()]
+        if DELIMITER in buff:
+            next_msg, sep, msgs_rest = buff.partition(DELIMITER)
+            self.MSGS[client_sock.fileno()].append(next_msg)        # store complete msg on deque
+            self.buffers[client_sock.fileno()] = msgs_rest          # store partial msg
+        else:
             chunk = client_sock.recv(MAX_BUFFER_SIZE)
-            #print ("client received ", chunk, len(chunk))
-            # check for msg delimiter
-            next_msg, sep, msgs_rest = chunk.partition("\0")
-            if sep  != '':
+            next_msg, sep, msgs_rest = chunk.partition(DELIMITER)
+            if sep  == DELIMITER:
                 # delimiter found
-                msg = msg + next_msg
-                msgs_rest_new = msgs_rest
-                return (msg, msgs_rest_new)
+                # store number of messaages from this client, if not yet stored
+                if self.MSGSLEN[client_sock.fileno()] < 0:
+                    self.MSGSLEN[client_sock.fileno()] = int((buff + next_msg)[:-1])  # set number of messages
+                # store complete msg
+                # store partial msg
+                self.MSGS[client_sock.fileno()].append(buff + next_msg)
+                self.buffers[client_sock.fileno()] = msgs_rest
             else:
                 # delimiter not found
-                msg = msg + next_msg
+                # concatenate partial messages
+                self.buffers[client_sock.fileno()] = buff + next_msg
+        return 
 
-            
-    def myreceive_all(self, client_sock):
-        ''' returns a list of messages'''
-        msgs=[]
-        first_msg, msgs_rest = self.myreceive_one(client_sock, '')
-        print ("first msg:", first_msg) # number of msgs to follow
-        num_msgs = int(first_msg)
-        for i in range(num_msgs):
-            m, msgs_rest = self.myreceive_one(client_sock, msgs_rest)
-            msgs.append(m)
-        return msgs
-        
-class  Connection(threading.Thread):
-    """
-    a threaded connection between server and client
-    """
-    def __init__(self, client_sock, client_addr, handler, msgs=None):
-        threading.Thread.__init__(self)
-        self.client = client_sock
-        self.addr = client_addr
-        self.handler = handler
-        self.msgs = msgs
-
-    def run(self):
-        self.handler(self.addr, self.client, self.msgs)
+##################################################################################            
 
 if __name__ == "__main__":
     print 'Echo Server starting'
     s = Server(PORT)
-    s.serv(s.echo_handler) 
+    s.serv([s.sock]) 

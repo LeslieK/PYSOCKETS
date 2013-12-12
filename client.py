@@ -1,71 +1,116 @@
 import socket
+from collections import deque
 # CLIENT
 MAX_BUFFER_SIZE = 1024
+DELIMITER = "\n"
 
 class Client:
     '''
     a client socket
+    protocol: 
+    client initiates conversation
+    client can send multiple messages before receiving a response
+    messages do not have fixed length
+    1st message: number of messages to send
+    each message is delimited by new line
+    on recv: client calls recv() until it receives all messages
+
     '''
 
-    def __init__(self, host, port):
+    def __init__(self, server_addr, msgs):
         '''creates a client socket'''
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print "Client about to connect"
-        self.sock.connect((host, port))
-        self.msgs_rest = '' # msgs after first delimiter
+        print "client about to connect"
+        self.N = len(msgs)
+        print "number of messages to send: {}".format(self.N)
+        self.sock.connect(server_addr)
+        self.sendQ = deque()
+        self.sendQ.append(str(self.N) + DELIMITER) # initialize msgs with number of messages
+        for msg in msgs:
+            self.sendQ.append(msg)
+        self.recvQ = deque()     # each element is a complete message
+        self.buffer = ""         # holds part of a msg; complete msg is appended to recvQ
+        self.sock.setblocking(False) # make socket non-blocking
 
-    def mysend(self, msg):
-        '''sends 1 message'''
-        totalsent = 0 # number of characters
-        while totalsent < len(msg):
-            sent = self.sock.send(msg[totalsent:])
+    def send(self):
+        """send message"""
+        nextMSG = self.sendQ.popleft() 
+        if nextMSG != '':
+            sent = self.sock.send(nextMSG)
             print "client sent ",  sent
             if sent == 0:
                 raise RuntimeError("socket connection broken")
-            totalsent = totalsent + sent
-        # add delimiter
-        self.sock.send("\0")
+            self.sendQ.appendleft(nextMSG[sent:]) # add part of msg not sent to front of deque
+        return len(self.sendQ) == 0
 
     
-    def myreceive_one(self):
-        '''read one msg, chunk by chunk; returns one msg'''
-        #msgs_rest = self.msgs_rest
-        #self.msgs_rest = '' # reset instance variable
-
-        # read rest of last message from buffer (if buffer not empty)
-        msg, sep, msgs_rest = self.msgs_rest.partition("\0")
-        if sep != '':
-            self.msgs_rest = msgs_rest
-            return msg
-
-        while True:
+    def receive(self):
+        """read characters; store complete msgs in recvQ"""
+        print 'Client: in receive()'
+        if DELIMITER in self.buffer:
+            next_msg, sep, msgs_rest = self.buffer.partition(DELIMITER)
+            self.recvQ.append(next_msg)
+            self.buffer = msgs_rest
+            return len(self.recvQ) == (self.N + 1)
+        else:
             chunk = self.sock.recv(MAX_BUFFER_SIZE)
-            #print ("client received ", chunk, len(chunk))
             # check for msg delimiter
-            next_msg, sep, msgs_rest = chunk.partition("\0")
-            if sep  != '':
+            next_msg, sep, msgs_rest = chunk.partition(DELIMITER)
+            if sep  == DELIMITER:
                 # delimiter found
-                msg = msg + next_msg
-                self.msgs_rest = msgs_rest
-                return msg
+                msg = self.buffer + next_msg
+                self.recvQ.append(msg)
+                self.buffer = msgs_rest # could contain 0 or more DELIMITERS
             else:
                 # delimiter not found
-                msg = msg + next_msg
+                self.buffer += next_msg
+        print len(self.recvQ)
+        return len(self.recvQ) == (self.N + 1)
+        
 
-            
-    def myreceive_all(self):
-        '''returns a list of messages'''
-        msgs=[]
-        first_msg = self.myreceive_one()
-        print "first msg:", first_msg # number of msgs to follow
-        num_msgs = int(first_msg)
-        for i in range(num_msgs):
-            msgs.append(self.myreceive_one())
-    #    self.sock.close()
-        return msgs
 
-    def close(self):
-        self.sock.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
