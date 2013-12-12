@@ -31,7 +31,7 @@ class Server:
         running = True
         while running:
             readready, writeready, _ = select.select(inputs, outputs, [])
-            print readready
+#            print readready
             for s in readready:
                 if s == self.sock:
                     # handle the server socket
@@ -54,20 +54,24 @@ class Server:
                     outputs.add(s)
             for s in writeready:
                     # write to client socket
-                    print "Writing to {}".format(s)
+#                    print "Writing to {}".format(s)
                     self.write(s)
 
     def write(self, client_sock):
         """write characters"""
         # attempt to write a complete message
-        nextMSG = self.MSGS[client_sock.fileno()].popleft()
-        if nextMSG != '':
-            print "Server: about to send {}".format(nextMSG)
-            sent = client_sock.send(nextMSG)
-            print "Server sent {} bytes to {}".format(sent, client_sock.getsockname())
-            if sent == 0:
-                raise RuntimeError("socket connection broken")
-            self.MSGS[client_sock.fileno()].appendleft(nextMSG[sent:]) # add part of msg not sent to front of deque
+#        print "Write called with queue {}".format(self.MSGS[client_sock.fileno()])
+        dq = self.MSGS[client_sock.fileno()]
+        
+        if dq:
+            nextMSG = dq.popleft()
+            if nextMSG != '':
+#            print "Server: about to send {}".format(nextMSG)
+                sent = client_sock.send(nextMSG)
+                print "Server sent {} bytes to {}".format(sent, client_sock.getsockname())
+                if sent == 0:
+                    raise RuntimeError("socket connection broken")
+                self.MSGS[client_sock.fileno()].appendleft(nextMSG[sent:]) # add part of msg not sent to front of deque
         return 
     
     def read(self, client_sock):
@@ -75,7 +79,7 @@ class Server:
         buff = self.buffers[client_sock.fileno()]
         if DELIMITER in buff:
             next_msg, sep, msgs_rest = buff.partition(DELIMITER)
-            self.MSGS[client_sock.fileno()].append(next_msg)        # store complete msg on deque
+            self.MSGS[client_sock.fileno()].append(next_msg + DELIMITER)        # store complete msg on deque
             self.buffers[client_sock.fileno()] = msgs_rest          # store partial msg
         else:
             chunk = client_sock.recv(MAX_BUFFER_SIZE)
@@ -85,9 +89,10 @@ class Server:
                 # store number of messaages from this client, if not yet stored
                 if self.MSGSLEN[client_sock.fileno()] < 0:
                     self.MSGSLEN[client_sock.fileno()] = int((buff + next_msg)[:-1])  # set number of messages
+                    print "MSGLEN is ", self.MSGSLEN[client_sock.fileno()]
                 # store complete msg
                 # store partial msg
-                self.MSGS[client_sock.fileno()].append(buff + next_msg)
+                self.MSGS[client_sock.fileno()].append(buff + next_msg + DELIMITER)
                 self.buffers[client_sock.fileno()] = msgs_rest
             else:
                 # delimiter not found
