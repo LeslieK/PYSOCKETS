@@ -2,7 +2,7 @@ import socket
 import select
 from collections import defaultdict, deque
 
-# SERVER 
+# SERVER
 
 PORT = 8765
 SERVER_ADDR = ('localhost', PORT)
@@ -20,7 +20,7 @@ class Server:
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow reuse of local addresses (why is this not the default?)
         self.sock.bind(SERVER_ADDR)
         self.sock.listen(BACKLOG)          # max number of connections waiting to be served
-        self.MSGS = defaultdict(deque)     # complete messages per client     
+        self.MSGS = defaultdict(deque)     # complete messages per client
         self.buffers = {}                  # partial messages per client
         self.MSGSLEN = {}                  # message lengths per client [len, sent, recvd]
         self.MSGSRECV = {}                 # messages received from each client
@@ -81,7 +81,7 @@ class Server:
                             outputs.append(s)
             for s in writeready:
                     # write to client socket
-                    #print "writing to {}".format(s.getsockname()[1])
+                    # print "writing to {}".format(s.getsockname()[1])
                     isDone = self.write(s)
                     if isDone:
                         print "Server is done writing to client {}".format(s.fileno())
@@ -113,41 +113,53 @@ class Server:
             return len(self.MSGS[client_sock.fileno()]) == 0
         else:
             return False
-    
-    def read(self, client_sock):
-        """read characters; build messages"""
+
+    def readBufferMsg(self, client_sock):
+        """"read characters from buffer"""
         buff = self.buffers[client_sock.fileno()]
         msgs_recv = self.MSGSRECV[client_sock.fileno()]
-        if DELIMITER in buff:
-            next_msg, sep, msgs_rest = buff.partition(DELIMITER)
-            self.MSGS[client_sock.fileno()].append(next_msg + DELIMITER)        # store complete msg on deque
-            self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1
-            self.buffers[client_sock.fileno()] = msgs_rest                  # store partial msg in buffer
-            return self.MSGSRECV[client_sock.fileno()] == self.MSGSLEN[client_sock.fileno()] + 1                    
-        else:
-            chunk = client_sock.recv(MAX_BUFFER_SIZE)
-            # check that client_sock is still connected
-            if chunk:
-                next_msg, sep, msgs_rest = chunk.partition(DELIMITER)
-                if sep == DELIMITER:
-                    # store number of messages from this client, if not yet stored
-                    if self.MSGSLEN[client_sock.fileno()] < 0:
-                        self.MSGSLEN[client_sock.fileno()] = int(buff + next_msg)               # set total number of messages to follow
-                        self.MSGS[client_sock.fileno()].append(buff + next_msg + DELIMITER)     # store complete msg
-                        self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1                     # first message received
-                    else:
-                        self.MSGS[client_sock.fileno()].append(buff + next_msg + DELIMITER)     # store complete msg
-                        self.buffers[client_sock.fileno()] = msgs_rest                          # store partial msg
-                        self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1                     # incr messages received  
-                else:
-                    # delimiter not found
-                    # concatenate partial messages
-                    self.buffers[client_sock.fileno()] = buff + next_msg
-                return self.MSGSRECV[client_sock.fileno()] == self.MSGSLEN[client_sock.fileno()] + 1
 
-##################################################################################            
+        next_msg, sep, msgs_rest = buff.partition(DELIMITER)
+        self.MSGS[client_sock.fileno()].append(next_msg + DELIMITER)        # store complete msg on deque
+        self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1
+        self.buffers[client_sock.fileno()] = msgs_rest                  # store partial msg in buffer
+
+        #return self.MSGSRECV[client_sock.fileno()] == self.MSGSLEN[client_sock.fileno()] + 1
+
+
+    def read(self, client_sock):
+        """
+        read characters; build messages
+        """
+        buff = self.buffers[client_sock.fileno()]
+        msgs_recv = self.MSGSRECV[client_sock.fileno()]
+        chunk = client_sock.recv(MAX_BUFFER_SIZE)
+        # check that client_sock is still connected
+        if chunk:
+            next_msg, sep, msgs_rest = chunk.partition(DELIMITER)
+            if sep == DELIMITER:
+                # store number of messages from this client, if not yet stored
+                if self.MSGSLEN[client_sock.fileno()] < 0:
+                    self.MSGSLEN[client_sock.fileno()] = int(buff + next_msg)               # set total number of messages to follow
+                    self.MSGS[client_sock.fileno()].append(buff + next_msg + DELIMITER)     # store complete msg
+                    self.buffers[client_sock.fileno()] = msgs_rest
+                    self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1                     # first message received
+                else:
+                    self.MSGS[client_sock.fileno()].append(buff + next_msg + DELIMITER)     # store complete msg
+                    self.buffers[client_sock.fileno()] = msgs_rest                          # store partial msg
+                    self.MSGSRECV[client_sock.fileno()] = msgs_recv + 1                     # incr messages received
+                while DELIMITER in self.buffers[client_sock.fileno()]:
+                    self.readBufferMsg(client_sock)
+            else:
+                # delimiter not found
+                # concatenate partial messages
+                self.buffers[client_sock.fileno()] = buff + next_msg
+
+            return self.MSGSRECV[client_sock.fileno()] == self.MSGSLEN[client_sock.fileno()] + 1
+
+##################################################################################
 
 if __name__ == "__main__":
     print 'Echo Server starting'
     s = Server(PORT)
-    s.serv([s.sock]) 
+    s.serv([s.sock])

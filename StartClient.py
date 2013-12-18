@@ -7,7 +7,7 @@ SERVER_ADDR = ('localhost', PORT)
 DELIMITER = "\0"
 
 with open("Genesis.txt") as f:
-	# retain "\n" 
+	# retain "\n"
 	# newline is msg delimiter
 	MSGS = []
 	while True:
@@ -39,7 +39,7 @@ while running:
 			print "{} still receiving".format(s.fileno())
 			if s not in rsocket:
 				# monitor for reading
-				rsocket.append(s)	
+				rsocket.append(s)
 	for s in writeready:
 		isDone = client.send()
 		if isDone:

@@ -7,12 +7,12 @@ DELIMITER = "\0"
 class Client:
     '''
     a client socket
-    protocol: 
+    protocol:
     client initiates conversation
     client can send multiple messages before receiving a response
     messages do not have fixed length
     1st message: number of messages to send
-    each message is delimited by new line
+    each message is delimited by DELIMITER
     on recv: client calls recv() until it receives all messages
 
     '''
@@ -25,7 +25,7 @@ class Client:
         self.total = 0                  # number of characters (1 char = 1 byte)
         print "number of messages to send: {}".format(self.N)
         self.sock.connect(server_addr)
-        self.sendQ = deque()                       
+        self.sendQ = deque()
         self.sendQ.append(str(self.N) + DELIMITER) # initialize msgs with number of messages
         for msg in msgs:
             self.sendQ.append(msg)
@@ -40,6 +40,7 @@ class Client:
             if nextMSG != "":
                 sent = self.sock.send(nextMSG)
                 print "client sent ",  sent
+                print nextMSG[:sent]
                 if sent == 0:
                     raise RuntimeError("send: socket connection broken")
                 if sent < len(nextMSG):
@@ -73,7 +74,7 @@ class Client:
             else:
                 # delimiter not found
                 if len(chunk) == 0:
-                    raise RuntimeError("receive: socket connection broken")  
+                    raise RuntimeError("receive: socket connection broken")
                 self.buffer += next_msg
                 print "last full msg {} , buffer: {}".format(self.recvL[-1], self.buffer)
         print "B Received {} messages, len of last msg: {}".format(len(self.recvL), len(self.recvL[-1]))
